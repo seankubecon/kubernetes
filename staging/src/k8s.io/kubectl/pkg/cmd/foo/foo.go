@@ -21,9 +21,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/resource"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"k8s.io/kubectl/pkg/scheme"
 	"k8s.io/kubectl/pkg/util/i18n"
 	"k8s.io/kubectl/pkg/util/templates"
 )
@@ -43,8 +46,10 @@ This is the foo command long description.
 
 // FooOptions are the knobs available for the "foo" command.
 type FooOptions struct {
-	Count           int
-	FilenameOptions resource.FilenameOptions
+	Count            int
+	FilenameOptions  resource.FilenameOptions
+	namespace        string
+	enforceNamespace bool
 }
 
 // NewCmdFoo a new Cobra command encasulating the "foo" command.
@@ -73,6 +78,12 @@ func NewCmdFoo(f cmdutil.Factory, ioStreams genericclioptions.IOStreams) *cobra.
 // Complete fills in all the FooOptions fields, including defaults.
 func (o *FooOptions) Complete(f cmdutil.Factory, args []string) error {
 
+	var err error
+	o.namespace, o.enforceNamespace, err = f.ToRawKubeConfigLoader().Namespace()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -87,6 +98,54 @@ func (o *FooOptions) Validate() error {
 
 // RunFoo executes the foo command.
 func (o *FooOptions) RunFoo(f cmdutil.Factory, ioStreams genericclioptions.IOStreams) error {
+
+	// The resource builder is used to retrieve and decode the resource from the
+	// local filesystem (e.g from a YAML file). This resource builder will specify the
+	// filename using the FilenameParam() method, reading the filename into the
+	// o.FilenameOptions variable. The Scheme specifies all the Group/Versions that
+	// this kubectl knows. Once the Group/Version/Kind specified in the YAML is matched
+	// to a GVK from the Scheme, then it can be decoded into an object of type GVK.
+	// An example of a GVK is apps/v1/Deployment. If the group is missing, it is in the
+	// "core" group. An example of this is core/v1/Pod. After the "Do" method creates
+	// the result, we call r.Visit() to iterate through the resources (there can
+	// be more than one).
+	r := f.NewBuilder().
+		WithScheme(scheme.Scheme, scheme.Scheme.PrioritizedVersionsAllGroups()...).
+		ContinueOnError().
+		NamespaceParam(o.namespace).DefaultNamespace().
+		FilenameParam(o.enforceNamespace, &o.FilenameOptions).
+		Flatten().
+		Do()
+	err := r.Err()
+	if err != nil {
+		return err
+	}
+
+	// Iterate through the result objects (in the resource.Info).
+	var obj runtime.Object
+	err = r.Visit(func(info *resource.Info, err error) error {
+		if err == nil {
+			fmt.Fprintf(ioStreams.Out, "Name: %s\n", info.Name)
+			obj = info.Object
+
+			// Create the resource helper. The parameters are a RESTMapping
+			// (essentially a GVK), and a RESTClient (created by the
+			// factory.ClientForMapping() method).
+			mapping := info.ResourceMapping()
+			client, err := f.ClientForMapping(mapping)
+			if err != nil {
+				return err
+			}
+			helper := resource.NewHelper(client, mapping)
+
+			// Using the resource helper, create the decoded object on the APIServer.
+			obj, err = helper.Create(info.Namespace, true, obj, &metav1.CreateOptions{})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 
 	return nil
 }

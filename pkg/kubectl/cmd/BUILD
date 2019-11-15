@@ -34,6 +34,7 @@ go_library(
         "//staging/src/k8s.io/kubectl/pkg/cmd/exec:go_default_library",
         "//staging/src/k8s.io/kubectl/pkg/cmd/explain:go_default_library",
         "//staging/src/k8s.io/kubectl/pkg/cmd/expose:go_default_library",
+        "//staging/src/k8s.io/kubectl/pkg/cmd/foo:go_default_library",
         "//staging/src/k8s.io/kubectl/pkg/cmd/get:go_default_library",
         "//staging/src/k8s.io/kubectl/pkg/cmd/kustomize:go_default_library",
         "//staging/src/k8s.io/kubectl/pkg/cmd/label:go_default_library",

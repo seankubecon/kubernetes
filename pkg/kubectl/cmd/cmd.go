@@ -49,6 +49,7 @@ import (
 	cmdexec "k8s.io/kubectl/pkg/cmd/exec"
 	"k8s.io/kubectl/pkg/cmd/explain"
 	"k8s.io/kubectl/pkg/cmd/expose"
+	"k8s.io/kubectl/pkg/cmd/foo"
 	"k8s.io/kubectl/pkg/cmd/get"
 	"k8s.io/kubectl/pkg/cmd/label"
 	"k8s.io/kubectl/pkg/cmd/logs"
@@ -488,6 +489,7 @@ func NewKubectlCommand(in io.Reader, out, err io.Writer) *cobra.Command {
 		{
 			Message: "Basic Commands (Beginner):",
 			Commands: []*cobra.Command{
+				foo.NewCmdFoo(f, ioStreams),
 				create.NewCmdCreate(f, ioStreams),
 				expose.NewCmdExposeService(f, ioStreams),
 				run.NewCmdRun(f, ioStreams),
