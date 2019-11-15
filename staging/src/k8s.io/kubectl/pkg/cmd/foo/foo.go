@@ -50,11 +50,14 @@ type FooOptions struct {
 	FilenameOptions  resource.FilenameOptions
 	namespace        string
 	enforceNamespace bool
+	PrintFlags       *genericclioptions.PrintFlags
 }
 
 // NewCmdFoo a new Cobra command encasulating the "foo" command.
 func NewCmdFoo(f cmdutil.Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
-	o := &FooOptions{}
+	o := &FooOptions{
+		PrintFlags: genericclioptions.NewPrintFlags("created").WithDefaultOutput("name"),
+	}
 
 	cmd := &cobra.Command{
 		Use: "foo [--count=COUNT] --filename=FILENAME",
@@ -68,6 +71,8 @@ func NewCmdFoo(f cmdutil.Factory, ioStreams genericclioptions.IOStreams) *cobra.
 			cmdutil.CheckErr(o.RunFoo(f, ioStreams))
 		},
 	}
+
+	o.PrintFlags.AddFlags(cmd)
 
 	cmd.Flags().IntVarP(&o.Count, "count", "c", o.Count, "Usage for count flag.")
 	cmdutil.AddFilenameOptionFlags(cmd, &o.FilenameOptions, "")
@@ -121,11 +126,15 @@ func (o *FooOptions) RunFoo(f cmdutil.Factory, ioStreams genericclioptions.IOStr
 		return err
 	}
 
+	printer, err := o.PrintFlags.ToPrinter()
+	if err != nil {
+		return err
+	}
+
 	// Iterate through the result objects (in the resource.Info).
 	var obj runtime.Object
 	err = r.Visit(func(info *resource.Info, err error) error {
 		if err == nil {
-			fmt.Fprintf(ioStreams.Out, "Name: %s\n", info.Name)
 			obj = info.Object
 
 			// Create the resource helper. The parameters are a RESTMapping
@@ -139,10 +148,11 @@ func (o *FooOptions) RunFoo(f cmdutil.Factory, ioStreams genericclioptions.IOStr
 			helper := resource.NewHelper(client, mapping)
 
 			// Using the resource helper, create the decoded object on the APIServer.
-			obj, err = helper.Create(info.Namespace, true, obj, &metav1.CreateOptions{})
+			_, err = helper.Create(info.Namespace, true, obj, &metav1.CreateOptions{})
 			if err != nil {
 				return err
 			}
+			printer.PrintObj(obj, ioStreams.Out)
 		}
 		return nil
 	})
